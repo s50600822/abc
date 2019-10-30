@@ -1,0 +1,68 @@
+version: '2.1'
+services:
+  mysql:
+    container_name: mysql
+    #image: mysql:5.7.26
+    image: s50600822/conductor-mysql:5.7.26
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=pass
+      - sql_log_off=ON
+    healthcheck:
+        test: ["CMD-SHELL", "/usr/bin/mysql --user=root --password=pass --execute 'SHOW DATABASES;'"]
+        interval: 30s
+        timeout: 30s
+        retries: 3
+    volumes:
+      - mysqldata:/var/lib/mysql
+    networks:
+      - overlay
+
+  elasticsearch:
+    image: elasticsearch:5.5
+    container_name: elasticsearch
+    healthcheck:
+        test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
+        interval: 60s
+        timeout: 30s
+        retries: 3
+    environment:
+      - "ES_JAVA_OPTS=-Xmx2g -Xms2g"
+      - bootstrap.memory_local=true
+      - cluster.name=adlp-cluster
+    ports:
+      - 9200:9200
+      - 9300:9300
+    volumes:
+      - ./elasticsearch/config/elasticsearch.yml:/etc/elasticsearch/config/elasticsearch.yml
+      - ./elasticsearch/config/jvm.options:/etc/elasticsearch/config/jvm.options
+      - ./elasticsearch/config/log4j2.properties:/etc/elasticsearch/config/log4j2.properties
+      - esdata:/usr/share/elasticsearch/data
+    networks:
+      - overlay
+
+  conductor:
+    image: s50600822/conductor:server-2.13.5
+    depends_on:
+      mysql:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ${PWD}/conductor-config.properties:/app/config/config-local.properties
+    networks:
+      - overlay
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysqldata:
+    driver: local
+  esdata:
+    driver: local
+  conductordata:
+    driver: local
+
+networks:
+  overlay:
